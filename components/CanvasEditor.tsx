@@ -1,22 +1,25 @@
-import { useRef, useEffect } from "react";
+import { useEffect } from "react";
 
 interface Props {
+  canvasRef: React.RefObject<HTMLCanvasElement>;
   image: File | null;
   exportFormat: "png" | "jpg";
   canvasWidth: number;
   canvasHeight: number;
   fillMode: "blur" | "generative";
+  zoom: number;
+  sampleMode: "full" | "edge";
 }
 
 export default function CanvasEditor({
+  canvasRef,
   image,
-  exportFormat,
   canvasWidth,
   canvasHeight,
   fillMode,
+  zoom,
+  sampleMode,
 }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     if (!image || !canvasRef.current) return;
 
@@ -24,26 +27,27 @@ export default function CanvasEditor({
     if (!ctx) return;
 
     const img = new Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => {
+      //Set canvas dimensions and clear previous render
       canvasRef.current!.width = canvasWidth;
       canvasRef.current!.height = canvasHeight;
       ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
+      // BLUR BACKGROUND
       if (fillMode === "blur") {
-        //1. draw background using cover-style fill (no-stretch, clipped)
         const imgAspect = img.width / img.height;
         const canvasAspect = canvasWidth / canvasHeight;
 
         let bgWidth, bgHeight;
-        let bgX = 0, bgY = 0;
+        let bgX = 0,
+          bgY = 0;
 
+        // Calculate background size while preserving aspect ratio
         if (imgAspect > canvasAspect) {
-          // Image is wider
           bgHeight = canvasHeight;
           bgWidth = img.width * (canvasHeight / img.height);
           bgX = (canvasWidth - bgWidth) / 2;
         } else {
-          // Image is taller
           bgWidth = canvasWidth;
           bgHeight = img.height * (canvasWidth / img.width);
           bgY = (canvasHeight - bgHeight) / 2;
@@ -57,43 +61,118 @@ export default function CanvasEditor({
         ctx.restore();
       }
 
-      // 2. Center the original image
-      const scale = Math.min(
+      // GENERATIVE FILL BACKGROUND
+      if (fillMode === "generative") {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        const tempCtx = tempCanvas.getContext("2d");
+
+        if (tempCtx) {
+          tempCtx.drawImage(img, 0, 0);
+          const imgData = tempCtx.getImageData(
+            0,
+            0,
+            img.width,
+            img.height
+          ).data;
+
+          let r = 0,
+            g = 0,
+            b = 0,
+            count = 0;
+
+          //Average of all pixels
+          if (sampleMode === "full") {
+            for (let i = 0; i < imgData.length; i += 4) {
+              r += imgData[i];
+              g += imgData[i + 1];
+              b += imgData[i + 2];
+              count++;
+            }
+          }
+          // Average of edge pixels only
+          else {
+            const edgeThickness = 10;
+            // Top edge
+            for (let y = 0; y < edgeThickness; y++) {
+              for (let x = 0; x < img.width; x++) {
+                const i = (y * img.width + x) * 4;
+                r += imgData[i];
+                g += imgData[i + 1];
+                b += imgData[i + 2];
+                count++;
+              }
+            }
+
+            // Bottom edge
+            for (let y = img.height - edgeThickness; y < img.height; y++) {
+              for (let x = 0; x < img.width; x++) {
+                const i = (y * img.width + x) * 4;
+                r += imgData[i];
+                g += imgData[i + 1];
+                b += imgData[i + 2];
+                count++;
+              }
+            }
+
+            // Left and right edges (Limited to first and last 5 columns)
+            for (let y = edgeThickness; y < img.height - edgeThickness; y++) {
+              for (let x of [
+                0,
+                1,
+                2,
+                3,
+                4,
+                img.width - 5,
+                img.width - 4,
+                img.width - 3,
+                img.width - 2,
+                img.width - 1,
+              ]) {
+                const i = (y * img.width + x) * 4;
+                r += imgData[i];
+                g += imgData[i + 1];
+                b += imgData[i + 2];
+                count++;
+              }
+            }
+          }
+
+          // Apply background fill color if count was valid
+          if (count > 0) {
+            r = Math.floor(r / count);
+            g = Math.floor(g / count);
+            b = Math.floor(b / count);
+            ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+          }
+        }
+      }
+
+      // CENTERED FOREGROUND IMAGE
+      const baseScale = Math.min(
         canvasWidth / img.width,
         canvasHeight / img.height
       );
+      const scale = baseScale * zoom;
       const drawWidth = img.width * scale;
       const drawHeight = img.height * scale;
       const x = (canvasWidth - drawWidth) / 2;
       const y = (canvasHeight - drawHeight) / 2;
-
+      // Draw original image on top of background
       ctx.drawImage(img, x, y, drawWidth, drawHeight);
     };
 
+    // Trigger image load
     img.src = URL.createObjectURL(image);
-  }, [image, canvasWidth, canvasHeight, fillMode]);
-
-  const handleDownload = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const mimeType = exportFormat === "jpg" ? "image/jpeg" : "image/png";
-    canvas.toBlob((blob) => {
-      if (!blob) return;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `backdrop.${exportFormat}`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }, mimeType);
-  };
+  }, [image, canvasRef, canvasWidth, canvasHeight, fillMode, zoom, sampleMode]);
 
   return (
     <div className="flex flex-col items-center text-center">
       <h2 className="text-xl font-semibold mb-2">Preview Output</h2>
       <div
-        className="w-full max-w-[500px] border border-zinc-700 rounded shadow overflow-hidden bg-zinc-800"
+        className="w-full max-w-[500px] max-h-screen border border-zinc-700 rounded shadow overflow-hidden bg-zinc-800"
         style={{ aspectRatio: `${canvasWidth} / ${canvasHeight}` }}
       >
         <canvas
@@ -102,13 +181,6 @@ export default function CanvasEditor({
           className="block"
         />
       </div>
-      <button
-        onClick={handleDownload}
-        disabled={!image}
-        className="mt-4 bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-      >
-        Download Image
-      </button>
     </div>
   );
 }
