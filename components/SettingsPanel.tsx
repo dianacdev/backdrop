@@ -1,5 +1,3 @@
-import React from "react";
-
 interface Props {
   setExportFormat: (format: "png" | "jpg") => void;
   canvasWidth: number;
@@ -17,67 +15,52 @@ export default function SettingsPanel({
   canvasHeight,
   setCanvasHeight,
   fillMode,
-  setFillMode
+  setFillMode,
 }: Props) {
-  const handleFormatChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setExportFormat(e.target.value as "png" | "jpg");
-  };
   return (
-    <div className="mt-6">
-      <h2 className="text-xl font-semibold mb-2">Canvas Settings</h2>
-      <div className="space-y-2">
-        <label className="block">
-          Width:
+    <div className="w-full max-w-4xl mx-auto">
+      <h2 className="text-xl font-semibold mb-4">Canvas Settings</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <label className="flex flex-col text-sm">
+          Width
           <input
             type="number"
             value={canvasWidth}
             onChange={(e) => setCanvasWidth(Number(e.target.value))}
-            className="ml-2 border p-1 w-24"
+            className="mt-1 p-2 rounded bg-zinc-800 text-white border border-zinc-600"
           />
         </label>
-        <label className="block">
-          Height:
+
+        <label className="flex flex-col text-sm">
+          Height
           <input
             type="number"
             value={canvasHeight}
             onChange={(e) => setCanvasHeight(Number(e.target.value))}
-            className="ml-2 border p-1 w-24"
+            className="mt-1 p-2 rounded bg-zinc-800 text-white border border-zinc-600"
           />
         </label>
-        <label className="block">
-          Fill Mode:
+
+        <label className="flex flex-col text-sm">
+          Fill Mode
           <select
-            className="ml-2 border p-1"
             value={fillMode}
             onChange={(e) =>
               setFillMode(e.target.value as "blur" | "generative")
             }
+            className="mt-1 p-2 rounded bg-zinc-800 text-white border border-zinc-600"
           >
             <option value="blur">Blur</option>
             <option value="generative">Generative Fill</option>
           </select>
         </label>
 
-        <label className="block">
-          Image Fit:
-          <select className="ml-2 border p-1">
-            <option>Fit</option>
-            <option>Crop</option>
-          </select>
-        </label>
-        <label className="block">
-          Download As:
-          <select className="ml-2 border p-1">
-            <option>PNG</option>
-            <option>JPG</option>
-          </select>
-        </label>
-        <label className="block">
-          Download As:
+        <label className="flex flex-col text-sm">
+          Download Format
           <select
-            className="ml-2 border p-1"
-            onChange={handleFormatChange}
+            onChange={(e) => setExportFormat(e.target.value as "png" | "jpg")}
             defaultValue="png"
+            className="mt-1 p-2 rounded bg-zinc-800 text-white border border-zinc-600"
           >
             <option value="png">PNG</option>
             <option value="jpg">JPG</option>
